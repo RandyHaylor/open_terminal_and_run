@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-terminal-window-and-run"
-version = "0.2.0"
+version = "0.1.0"
 description = "Cross-platform, stdlib-only helper to open a new terminal WINDOW and run a command in it. Designed for AI agents."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -228,7 +228,7 @@ This module gives the user a window. If the agent needs the data, the agent shou
 
 ## Verified working — live screenshots in the release
 
-Every push to `main` runs each supported mechanism end-to-end in CI: a real window opens, a sentinel-writing command runs inside it, a screenshot is captured. Screenshots are uploaded to the [v0.2.0 release](https://github.com/RandyHaylor/open_terminal_window_and_run/releases/tag/v0.2.0) and overwritten on every successful build.
+Every push to `main` runs each supported mechanism end-to-end in CI: a real window opens, a sentinel-writing command runs inside it, a screenshot is captured. Screenshots are uploaded to the [latest release](https://github.com/RandyHaylor/open_terminal_window_and_run/releases/latest) (release tag is derived from `version` in `pyproject.toml`) and overwritten on every successful build.
 
 **End-to-end CI-verified each push:**
 

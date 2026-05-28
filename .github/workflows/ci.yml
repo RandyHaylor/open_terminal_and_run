@@ -189,11 +189,13 @@ jobs:
 
   # =====================================================================
   # 7. Aggregator — download all screenshot artifacts and (over)write
-  # them to the v0.2.0 GitHub Release. Only runs on push to main, after
-  # the real-spawn jobs have produced artifacts.
+  # them to the current GitHub Release for this version. Release tag is
+  # derived from `version` in pyproject.toml (the single source of
+  # truth) so version bumps require only that one edit.
+  # Only runs on push to main, after the real-spawn jobs.
   # =====================================================================
   publish_screenshots_to_release:
-    name: Publish screenshots to v0.2.0 release
+    name: Publish screenshots to release
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
@@ -203,6 +205,19 @@ jobs:
       # macOS best-effort intentionally not required — continue-on-error.
     steps:
       - uses: actions/checkout@v4
+      - name: Read version from pyproject.toml (single source of truth)
+        id: extract_project_version
+        run: |
+          PROJECT_VERSION=$(grep -E '^version[[:space:]]*=' pyproject.toml \
+            | head -1 \
+            | sed -E 's/^version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/')
+          if [ -z "$PROJECT_VERSION" ]; then
+            echo "ERROR: could not extract version from pyproject.toml" >&2
+            exit 1
+          fi
+          echo "Extracted project version: '$PROJECT_VERSION'"
+          echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
       - name: Download all screenshot artifacts
         uses: actions/download-artifact@v4
         with:
@@ -211,17 +226,18 @@ jobs:
           merge-multiple: true
       - name: List collected screenshots
         run: ls -la "$RUNNER_TEMP/all_screenshots/" || true
-      - name: Ensure v0.2.0 release exists, then upload screenshots
+      - name: Ensure release exists, then upload screenshots
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.extract_project_version.outputs.release_tag }}
         run: |
-          if ! gh release view v0.2.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release v0.2.0 missing; creating tag and release on $GITHUB_SHA"
-            gh release create v0.2.0 \
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG missing; creating tag and release on $GITHUB_SHA"
+            gh release create "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "v0.2.0" \
-              --notes "Initial release. Screenshots below are auto-updated by CI on every push to main, demonstrating real terminal-window spawning across all supported mechanisms."
+              --title "$RELEASE_TAG" \
+              --notes "Screenshots below are auto-updated by CI on every push to main, demonstrating real terminal-window spawning across all supported mechanisms."
           fi
           shopt -s nullglob
           shot_files=("$RUNNER_TEMP/all_screenshots/"*.png)
@@ -229,6 +245,6 @@ jobs:
             echo "No screenshot files found; nothing to upload."
             exit 0
           fi
-          gh release upload v0.2.0 "${shot_files[@]}" \
+          gh release upload "$RELEASE_TAG" "${shot_files[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
