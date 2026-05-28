@@ -36,7 +36,9 @@ def test_cli_tmux_env_does_not_trigger_pane_split():
     """Even with $TMUX set, the CLI must not pick tmux — only window mechanisms."""
     r = _run_cli("--detect-only", "echo hi",
                  env_overrides={"TMUX": "/tmp/fake,1,0"})
-    assert r.returncode == 0
+    # 0 = mechanism detected; 2 = manual fallback (bare runner with no GUI terminals).
+    # Both are valid; what matters is that tmux is never the mechanism.
+    assert r.returncode in (0, 2)
     assert "tmux" not in r.stdout.lower()
 
 
@@ -47,7 +49,11 @@ def test_cli_usage_error_when_missing_cmd():
 
 def test_cli_tethered_flag_is_accepted():
     r = _run_cli("--detect-only", "--tethered", "echo hi")
-    assert r.returncode == 0
+    # 0 = mechanism found, 2 = manual fallback. Either proves the flag parsed
+    # cleanly (parser would exit 2 with usage error if --tethered was unknown,
+    # but the *message* would differ; here we check argparse didn't error).
+    assert r.returncode in (0, 2)
+    assert "unrecognized arguments" not in r.stderr.lower()
 
 
 def test_public_api_surface():
