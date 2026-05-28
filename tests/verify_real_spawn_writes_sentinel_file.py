@@ -54,13 +54,20 @@ def build_sentinel_writer_command(sentinel_path: Path) -> str:
     helper = Path(__file__).resolve().parent / "sentinel_writer_helper.py"
     python_executable = sys.executable
     if sys.platform == "win32":
+        # Put the wrapper .bat in a path with no spaces so cmd.exe's /c
+        # rules don't need to deal with quoting at all. Use a sibling
+        # path of the sentinel which is in RUNNER_TEMP (also space-free).
         wrapper_bat = sentinel_path.with_suffix(".bat")
         wrapper_bat.write_text(
             "@echo off\r\n"
             f'"{python_executable}" "{helper}" "{sentinel_path}"\r\n',
             encoding="ascii",
         )
-        return f'"{wrapper_bat}"'
+        # Return the bare path — do NOT pre-quote. subprocess.Popen on
+        # Windows joins the argv list and quotes args containing spaces;
+        # adding outer quotes here results in double-quoting that
+        # confuses cmd.exe's /c parser.
+        return str(wrapper_bat)
     return (f"{shlex.quote(python_executable)} "
             f"{shlex.quote(str(helper))} "
             f"{shlex.quote(str(sentinel_path))}")

@@ -205,6 +205,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Diagnostic — can `start` open a new console on this runner?
+        shell: pwsh
+        run: |
+          $diag = Join-Path $env:RUNNER_TEMP "diag_start.txt"
+          Remove-Item $diag -ErrorAction SilentlyContinue
+          # Direct invocation via cmd.exe — no python, no subprocess wrapping.
+          cmd /c "start `"`" cmd /c `"echo DIAG_OK > $diag`""
+          Start-Sleep -Seconds 10
+          if (Test-Path $diag) {
+            Write-Host "DIAGNOSTIC: start works on this runner. Contents: $(Get-Content $diag)"
+          } else {
+            Write-Host "DIAGNOSTIC: start did not create a new console that ran our command."
+          }
       - name: Spawn cmd.exe (wt hidden) and verify sentinel
         shell: pwsh
         run: |
