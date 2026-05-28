@@ -58,16 +58,19 @@ EXIT CODES (CLI)
 DETECTION ORDER
 ---------------
 
-Each branch falls through on failure to the next:
+Each branch falls through on failure to the next. The goal is always
+a new top-level OS WINDOW — tab/pane mechanisms (tmux, wt tabs into
+existing windows) are deliberately avoided.
 
-  1. tmux         (if $TMUX is set — works across any OS where tmux is
-                  running; most reliable when applicable)
-  2. macOS        (uname -s == Darwin — uses osascript + Terminal.app)
-  3. Windows      (cygwin/mingw/msys uname, or sys.platform == 'win32' —
-                  prefers Windows Terminal `wt.exe`, falls back to cmd.exe)
-  4. Linux        (tries: gnome-terminal, konsole, xfce4-terminal,
-                  alacritty, kitty, xterm — first one found wins)
-  5. Manual       (no mechanism detected; structured result with the
+  1. macOS        (uname -s == Darwin — uses osascript + Terminal.app,
+                  always spawns a new window)
+  2. Windows      (cygwin/mingw/msys uname, or sys.platform == 'win32' —
+                  prefers Windows Terminal `wt.exe` with `-w new` to
+                  force a new window, falls back to `cmd /c start ""`
+                  which always opens a new console window)
+  3. Linux        (tries: gnome-terminal, konsole, xfce4-terminal,
+                  alacritty, xterm — each invocation opens a new window)
+  4. Manual       (no mechanism detected; structured result with the
                   command to run by hand)
 
 
@@ -261,17 +264,13 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
 
     Returns a DetectionResult with .opened=False (since nothing was
     actually opened), but with .mechanism and .argv populated to show
-    what WOULD happen on open_terminal_and_run().
-    """
-    # 1. tmux
-    if _is_tmux():
-        argv = ["tmux", "split-window", "-h", cmd]
-        return DetectionResult(
-            opened=False, mechanism="tmux", argv=argv,
-            manual_command=cmd, detail="$TMUX is set; would split a tmux pane",
-        )
+    what WOULD happen on open_terminal_window_and_run().
 
-    # 2. macOS
+    The point of this module is opening a new top-level OS WINDOW.
+    tmux is deliberately NOT a detection target — splitting a tmux
+    pane is not opening a window.
+    """
+    # 1. macOS
     if _is_macos():
         # Pattern copied from Thonny (thonny/terminal.py) and
         # skywind3000/terminal — both branch on whether Terminal.app is
@@ -303,14 +302,20 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
             manual_command=cmd, detail="darwin uname; would use osascript",
         )
 
-    # 3. Windows (native or via Git Bash uname)
+    # 2. Windows (native or via Git Bash uname)
     if _is_windows_native() or _is_windows_via_uname():
         if shutil.which("wt.exe") or shutil.which("wt"):
             wt = shutil.which("wt.exe") or shutil.which("wt")
-            argv = [wt, "new-tab", "cmd", "/k", cmd]
+            # `-w new` forces a NEW Windows Terminal window. Without
+            # it, `new-tab` adds a tab to an existing wt window if
+            # one is already running, which is not what callers of
+            # this module want — they want a new top-level window.
+            # Docs: https://learn.microsoft.com/en-us/windows/terminal/command-line-arguments
+            argv = [wt, "-w", "new", "new-tab", "cmd", "/k", cmd]
             return DetectionResult(
                 opened=False, mechanism="Windows Terminal", argv=argv,
-                manual_command=cmd, detail="wt.exe found",
+                manual_command=cmd,
+                detail="wt.exe found; using -w new to force new window",
             )
         if shutil.which("cmd.exe") or shutil.which("cmd"):
             cmdbin = shutil.which("cmd.exe") or shutil.which("cmd")
@@ -326,7 +331,7 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
             )
         # If we're on Windows but neither launcher is found, fall through.
 
-    # 4. Linux desktop terminal
+    # 3. Linux desktop terminal
     if not _is_windows_native():  # don't try Linux terminals on Windows native
         spec = _detect_linux_terminal()
         if spec:
@@ -338,48 +343,85 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
                 manual_command=cmd, detail=f"detected {binary} via shutil.which",
             )
 
-    # 5. No mechanism — return manual fallback
+    # 4. No mechanism — return manual fallback
     return DetectionResult(
         opened=False, mechanism=None, argv=None,
         manual_command=cmd, detail="no terminal launcher detected",
     )
 
 
-def open_terminal_and_run(cmd: str, keep_open: bool = True) -> DetectionResult:
-    """Open a new terminal window/pane and run `cmd` in it.
+def open_terminal_window_and_run(
+    cmd: str,
+    keep_open: bool = True,
+    untethered: bool = True,
+) -> DetectionResult:
+    """Open a new terminal WINDOW (a top-level OS window) and run `cmd` in it.
 
-    Returns a DetectionResult. If .opened is True, the command was
-    launched successfully. If False, no mechanism was available; use
-    .manual_command to instruct the user.
+    Always opens a new window, not a tab or a multiplexer pane. The
+    spawn is non-blocking — this function returns as soon as the
+    launcher process has been started.
 
     Parameters:
-        cmd: The shell command to run in the new window.
-        keep_open: If True, the new window stays open after cmd exits
-                   (POSIX: appends `; exec bash`). If False, window
-                   closes when cmd finishes.
+        cmd: The shell command to run inside the new terminal window.
+        keep_open: If True, the window stays open after cmd exits
+                   (POSIX: appends `; exec bash` so the user can read
+                   final output). If False, the window closes as soon
+                   as cmd finishes.
+        untethered: If True (default), the spawned window's lifecycle
+                   is independent of the calling process — the window
+                   keeps running even if the caller exits. If False,
+                   the window is coupled to the calling process on
+                   POSIX systems (no new session is created; the
+                   window may receive SIGHUP and die when the caller's
+                   controlling terminal goes away).
+
+                   Platform notes (honest):
+                   - POSIX Linux: untethered is fully enforced via
+                     subprocess `start_new_session`. tethered also
+                     fully enforced — child shares the parent's
+                     session.
+                   - macOS: the spawner (osascript) exits immediately,
+                     handing off to Terminal.app, which has its own
+                     application session. The window is ALWAYS
+                     untethered on macOS regardless of this flag.
+                   - Windows: `cmd /c start ""` and `wt.exe` both
+                     detach at the OS level. The window is ALWAYS
+                     untethered on Windows regardless of this flag.
+
+    Returns:
+        DetectionResult — inspect `.opened` first. When False with
+        `.mechanism == None`, no window-opening mechanism was found
+        on the system; hand `.manual_command` to the user.
     """
     result = detect_mechanism(cmd, keep_open=keep_open)
     if result.argv is None:
         # No mechanism detected; return as-is for caller to handle.
         return result
 
+    popen_kwargs = dict(
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if untethered:
+        # Detach from the parent's process group / session on POSIX
+        # so the window survives the parent exiting. Ignored by
+        # Windows Popen but harmless there.
+        popen_kwargs["start_new_session"] = True
+
     try:
-        # Spawn detached (non-blocking).
-        # Popen rather than run() because we don't wait for the new
-        # window — we want the spawn call to return immediately.
-        subprocess.Popen(
-            result.argv,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,  # detach from current process group on POSIX
-        )
+        subprocess.Popen(result.argv, **popen_kwargs)
         result.opened = True
         return result
     except (OSError, subprocess.SubprocessError) as e:
         result.opened = False
         result.detail = f"spawn failed: {e}"
         return result
+
+
+# Backwards-compatible alias for callers still importing the pre-rename
+# name. New code should use `open_terminal_window_and_run`.
+open_terminal_and_run = open_terminal_window_and_run
 
 
 def main() -> int:
@@ -389,11 +431,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Open a new terminal window and run a command in it.",
     )
-    parser.add_argument("cmd", help="The shell command to run in the new terminal.")
+    parser.add_argument("cmd", help="The shell command to run in the new terminal window.")
     parser.add_argument(
         "--no-keep-open",
         action="store_true",
         help="Let the new window close when the command exits (default: keep open).",
+    )
+    parser.add_argument(
+        "--tethered",
+        action="store_true",
+        help="Couple the new window's lifecycle to the calling process. "
+             "Default is untethered: the window keeps running even if the "
+             "caller exits. Only enforceable on POSIX Linux; on macOS and "
+             "Windows the new window is always untethered at the OS level.",
     )
     parser.add_argument(
         "--detect-only",
@@ -403,11 +453,14 @@ def main() -> int:
     args = parser.parse_args()
 
     keep_open = not args.no_keep_open
+    untethered = not args.tethered
 
     if args.detect_only:
         result = detect_mechanism(args.cmd, keep_open=keep_open)
     else:
-        result = open_terminal_and_run(args.cmd, keep_open=keep_open)
+        result = open_terminal_window_and_run(
+            args.cmd, keep_open=keep_open, untethered=untethered,
+        )
 
     if result.opened:
         print(f"Terminal opened in: {result.mechanism}")

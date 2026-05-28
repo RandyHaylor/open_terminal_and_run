@@ -1,6 +1,6 @@
 """Verify argv shapes per terminal — gnome-terminal gets `--`, konsole gets `-e`, etc."""
 import pytest
-import open_terminal_and_run as otr
+import open_terminal_window_and_run as otr
 
 
 @pytest.fixture(autouse=True)

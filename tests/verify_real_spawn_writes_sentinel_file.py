@@ -1,6 +1,6 @@
 """Real-spawn verification harness with optional screenshot capture.
 
-Spawns a terminal via open_terminal_and_run, runs a helper inside it that
+Spawns a terminal via open_terminal_window_and_run, runs a helper inside it that
 writes a sentinel file + prints a banner + sleeps. Verifies the sentinel
 appears, then (optionally) captures a screenshot of the still-visible
 window using platform-appropriate tools.
@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-import open_terminal_and_run as otr  # noqa: E402
+import open_terminal_window_and_run as otr  # noqa: E402
 
 
 HELPER_SCRIPT_PATH = Path(__file__).resolve().parent / "sentinel_writer_helper.py"
@@ -194,7 +194,7 @@ def main() -> int:
     # keep_open=True so the spawned window stays alive long enough for the
     # screenshot; the in-terminal command's own sleep is what actually
     # determines visibility duration.
-    spawn_result = otr.open_terminal_and_run(in_terminal_command, keep_open=True)
+    spawn_result = otr.open_terminal_window_and_run(in_terminal_command, keep_open=True)
     print(f"[harness] mechanism = {spawn_result.mechanism!r}")
     print(f"[harness] opened    = {spawn_result.opened}")
     print(f"[harness] argv      = {spawn_result.argv!r}")

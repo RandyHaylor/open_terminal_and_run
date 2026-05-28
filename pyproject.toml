@@ -3,14 +3,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "open-terminal-and-run"
-version = "0.1.0"
-description = "Cross-platform, stdlib-only helper to open a new terminal and run a command in it."
+name = "open-terminal-window-and-run"
+version = "0.2.0"
+description = "Cross-platform, stdlib-only helper to open a new terminal WINDOW and run a command in it. Designed for AI agents."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Randy Haylor" }]
-keywords = ["terminal", "tmux", "subprocess", "cross-platform"]
+keywords = ["terminal", "window", "subprocess", "cross-platform", "ai-agent"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -22,17 +22,17 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/RandyHaylor/open_terminal_and_run"
-Issues = "https://github.com/RandyHaylor/open_terminal_and_run/issues"
+Homepage = "https://github.com/RandyHaylor/open_terminal_window_and_run"
+Issues = "https://github.com/RandyHaylor/open_terminal_window_and_run/issues"
 
 [project.scripts]
-open-terminal-and-run = "open_terminal_and_run:main"
+open-terminal-window-and-run = "open_terminal_window_and_run:main"
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
 
 [tool.setuptools]
-py-modules = ["open_terminal_and_run"]
+py-modules = ["open_terminal_window_and_run"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

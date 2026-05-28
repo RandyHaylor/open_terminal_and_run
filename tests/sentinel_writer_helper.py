@@ -15,7 +15,7 @@ from pathlib import Path
 
 BANNER_LINES = [
     "================================================",
-    "  open_terminal_and_run REAL SPAWN TEST WINDOW  ",
+    "  open_terminal_window_and_run REAL SPAWN TEST WINDOW  ",
     "================================================",
 ]
 
