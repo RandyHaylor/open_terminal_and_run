@@ -39,15 +39,20 @@ import open_terminal_and_run as otr  # noqa: E402
 
 
 def build_sentinel_writer_command(sentinel_path: Path) -> str:
-    """Return a shell command that writes READY into sentinel_path, in a form
-    appropriate for the OS we're targeting."""
+    """Return a shell command that invokes the python sentinel-writer helper.
+
+    Using a python helper instead of `echo > path` sidesteps per-shell
+    redirection quoting issues (cmd.exe consumes `>` in the outer shell
+    before `start` ever sees it, for example).
+    """
+    helper = Path(__file__).resolve().parent / "sentinel_writer_helper.py"
+    python_executable = sys.executable
     if sys.platform == "win32":
-        # cmd.exe and wt.exe (which by default launches cmd) both accept this.
-        # Quote the path because temp dirs on Windows can have spaces.
-        return f'echo READY> "{sentinel_path}"'
-    # POSIX shells (bash inside xterm/gnome-terminal/etc., tmux pane, mac
-    # Terminal.app's default shell). shlex.quote handles odd path chars.
-    return f"echo READY > {shlex.quote(str(sentinel_path))}"
+        # Quote paths because temp/tool dirs on Windows can contain spaces.
+        return f'"{python_executable}" "{helper}" "{sentinel_path}"'
+    return (f"{shlex.quote(python_executable)} "
+            f"{shlex.quote(str(helper))} "
+            f"{shlex.quote(str(sentinel_path))}")
 
 
 def hide_wt_from_which() -> None:

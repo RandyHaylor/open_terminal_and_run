@@ -86,11 +86,13 @@ jobs:
             apt_package: xfce4-terminal
             expected_mechanism: xfce4-terminal
           - terminal: alacritty
-            apt_package: alacritty
+            apt_package: alacritty libgl1-mesa-dri mesa-utils
             expected_mechanism: alacritty
+            needs_software_opengl: true
           - terminal: kitty
-            apt_package: kitty
+            apt_package: kitty libgl1-mesa-dri mesa-utils
             expected_mechanism: kitty
+            needs_software_opengl: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,6 +108,11 @@ jobs:
             if command -v "$t" >/dev/null; then echo "  FOUND: $t"; else echo "  missing: $t"; fi
           done
       - name: Spawn ${{ matrix.terminal }} under xvfb and verify sentinel
+        env:
+          # GPU-accelerated terminals (kitty, alacritty) need software OpenGL
+          # under xvfb where there is no real GPU.
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: "llvmpipe"
         run: |
           SENTINEL="$RUNNER_TEMP/sentinel_${{ matrix.terminal }}.txt"
           # gnome-terminal needs a DBus session bus
@@ -114,13 +121,13 @@ jobs:
               python3 tests/verify_real_spawn_writes_sentinel_file.py \
                 --expected-mechanism "${{ matrix.expected_mechanism }}" \
                 --sentinel "$SENTINEL" \
-                --timeout 45
+                --timeout 60
           else
             xvfb-run -a \
               python3 tests/verify_real_spawn_writes_sentinel_file.py \
                 --expected-mechanism "${{ matrix.expected_mechanism }}" \
                 --sentinel "$SENTINEL" \
-                --timeout 45
+                --timeout 60
           fi
 
   # =====================================================================
@@ -140,7 +147,7 @@ jobs:
           python3 tests/verify_real_spawn_writes_sentinel_file.py \
             --expected-mechanism "macOS Terminal.app" \
             --sentinel "$SENTINEL" \
-            --timeout 45
+            --timeout 90
 
   # =====================================================================
   # 5. Windows Terminal (wt.exe).

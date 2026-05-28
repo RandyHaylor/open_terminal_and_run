@@ -273,9 +273,16 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
 
     # 2. macOS
     if _is_macos():
-        # Build an AppleScript that runs the command in a new Terminal window
+        # Build an AppleScript that activates Terminal first (forces a window
+        # to come to the foreground / launches Terminal if not already
+        # running), then runs the command via `do script`.
         escaped_cmd = cmd.replace('"', '\\"')
-        applescript = f'tell application "Terminal" to do script "{escaped_cmd}"'
+        applescript = (
+            'tell application "Terminal"\n'
+            '    activate\n'
+            f'    do script "{escaped_cmd}"\n'
+            'end tell'
+        )
         argv = ["osascript", "-e", applescript]
         return DetectionResult(
             opened=False, mechanism="macOS Terminal.app", argv=argv,
@@ -293,7 +300,12 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
             )
         if shutil.which("cmd.exe") or shutil.which("cmd"):
             cmdbin = shutil.which("cmd.exe") or shutil.which("cmd")
-            argv = [cmdbin, "/c", "start", "cmd", "/k", cmd]
+            # The empty "" is the title arg for `start` — without it,
+            # start interprets the next quoted arg as the window title.
+            # Use /k when keeping the window open after the command, /c
+            # when not. /c lets the inner cmd window close on completion.
+            inner_flag = "/k" if keep_open else "/c"
+            argv = [cmdbin, "/c", "start", "", "cmd", inner_flag, cmd]
             return DetectionResult(
                 opened=False, mechanism="cmd.exe", argv=argv,
                 manual_command=cmd, detail="falling back to cmd.exe",
