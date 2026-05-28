@@ -419,11 +419,6 @@ def open_terminal_window_and_run(
         return result
 
 
-# Backwards-compatible alias for callers still importing the pre-rename
-# name. New code should use `open_terminal_window_and_run`.
-open_terminal_and_run = open_terminal_window_and_run
-
-
 def main() -> int:
     """CLI entry point."""
     import argparse

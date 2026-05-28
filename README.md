@@ -255,12 +255,6 @@ python3 open_terminal_window_and_run.py --detect-only "tail -f /tmp/my.log"
 
 ---
 
-## Backwards compatibility
-
-The previous import name `open_terminal_and_run` still works as an alias for callers who pinned to the pre-rename name. New code should use `open_terminal_window_and_run`.
-
----
-
 ## Tests
 
 ```bash

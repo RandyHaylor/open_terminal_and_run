@@ -63,7 +63,6 @@ def test_public_api_surface():
     sys.modules["otr_smoke"] = mod
     spec.loader.exec_module(mod)
     assert callable(mod.open_terminal_window_and_run)
-    assert callable(mod.open_terminal_and_run)  # backwards-compat alias
     assert callable(mod.detect_mechanism)
     assert hasattr(mod, "DetectionResult")
     assert hasattr(mod, "LINUX_TERMINALS")

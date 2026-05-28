@@ -138,6 +138,3 @@ def test_open_terminal_window_and_run_tethered_skips_new_session(monkeypatch):
     assert "start_new_session" not in captured_kwargs
 
 
-def test_backwards_compat_alias_open_terminal_and_run_exists():
-    """Old import name should still work."""
-    assert otr.open_terminal_and_run is otr.open_terminal_window_and_run
