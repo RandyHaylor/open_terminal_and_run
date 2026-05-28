@@ -41,15 +41,26 @@ import open_terminal_and_run as otr  # noqa: E402
 def build_sentinel_writer_command(sentinel_path: Path) -> str:
     """Return a shell command that invokes the python sentinel-writer helper.
 
-    Using a python helper instead of `echo > path` sidesteps per-shell
-    redirection quoting issues (cmd.exe consumes `>` in the outer shell
-    before `start` ever sees it, for example).
+    On Windows we wrap the python invocation in a .bat file and return
+    only the .bat path. This avoids cmd.exe's brutal `/c` quote-parsing
+    rules when our command is nested through `start "" cmd /c "..."` —
+    those rules choke on the embedded quotes around python.exe and its
+    args. The .bat wrapper means cmd.exe only sees a single unquoted
+    path, which it can pass through cleanly.
+
+    On POSIX we pass the python invocation directly — bash's quoting is
+    well-behaved.
     """
     helper = Path(__file__).resolve().parent / "sentinel_writer_helper.py"
     python_executable = sys.executable
     if sys.platform == "win32":
-        # Quote paths because temp/tool dirs on Windows can contain spaces.
-        return f'"{python_executable}" "{helper}" "{sentinel_path}"'
+        wrapper_bat = sentinel_path.with_suffix(".bat")
+        wrapper_bat.write_text(
+            "@echo off\r\n"
+            f'"{python_executable}" "{helper}" "{sentinel_path}"\r\n',
+            encoding="ascii",
+        )
+        return f'"{wrapper_bat}"'
     return (f"{shlex.quote(python_executable)} "
             f"{shlex.quote(str(helper))} "
             f"{shlex.quote(str(sentinel_path))}")

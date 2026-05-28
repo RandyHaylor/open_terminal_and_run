@@ -90,7 +90,7 @@ jobs:
             expected_mechanism: alacritty
             needs_software_opengl: true
           - terminal: kitty
-            apt_package: kitty libgl1-mesa-dri mesa-utils
+            apt_package: kitty libgl1-mesa-dri mesa-utils libegl-mesa0 libegl1
             expected_mechanism: kitty
             needs_software_opengl: true
     steps:
@@ -141,6 +141,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Diagnostic — can osascript control Terminal.app on this runner?
+        run: |
+          PROBE_FILE="$RUNNER_TEMP/probe_terminal_directly.txt"
+          rm -f "$PROBE_FILE"
+          echo "Running osascript probe with stderr visible:"
+          osascript -e 'tell application "Terminal"
+              activate
+              do script "echo DIRECT_PROBE_OK > '"$PROBE_FILE"'"
+          end tell' 2>&1 || echo "(osascript exited non-zero)"
+          echo "Waiting up to 30s for probe file..."
+          for i in $(seq 1 30); do
+            [ -f "$PROBE_FILE" ] && echo "Probe file appeared: $(cat $PROBE_FILE)" && break
+            sleep 1
+          done
+          [ -f "$PROBE_FILE" ] || echo "Probe file never appeared — likely TCC/AppleEvent restriction on CI runner."
       - name: Spawn macOS Terminal.app and verify sentinel
         run: |
           SENTINEL="$RUNNER_TEMP/sentinel_mac_terminal.txt"
