@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Run unit tests (detection + command construction + CLI, all mocked)
+        run: pytest -v
+
+  smoke-spawn-linux:
+    name: Real spawn smoke test (Linux + xterm + xvfb)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install xterm + xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xterm xvfb
+
+      - name: Spawn xterm headlessly via xvfb
+        run: |
+          xvfb-run -a python3 open_terminal_and_run.py --no-keep-open "true"
+          echo "spawn returned $?"

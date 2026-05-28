@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-terminal-and-run"
+version = "0.1.0"
+description = "Cross-platform, stdlib-only helper to open a new terminal and run a command in it."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Randy Haylor" }]
+keywords = ["terminal", "tmux", "subprocess", "cross-platform"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/RandyHaylor/open_terminal_and_run"
+Issues = "https://github.com/RandyHaylor/open_terminal_and_run/issues"
+
+[project.scripts]
+open-terminal-and-run = "open_terminal_and_run:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools]
+py-modules = ["open_terminal_and_run"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
