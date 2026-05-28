@@ -78,11 +78,25 @@ shows current proof of life for every mechanism.
 - Windows Terminal (wt.exe)
 - Windows cmd.exe
 
-**Best-effort (not CI-verifiable, works in real use):**
-- macOS Terminal.app via osascript — GitHub-hosted macOS runners block
-  AppleEvent automation via TCC permission gating with no UI to approve
-  the prompt. Verified locally on real macOS; CI job runs with
-  `continue-on-error: true` so the build doesn't fail.
+**Supported but untested in CI:**
+- **macOS Terminal.app via osascript.** GitHub-hosted macOS runners cannot
+  run this end-to-end: AppleEvent automation is TCC-gated with no UI to
+  approve the prompt, `open -a Terminal file.command` needs a logged-in
+  Aqua session that hosted runners don't have, and TCC.db pre-approval
+  is impossible because SIP is enabled on the runner. Documented in
+  [actions/runner-images #553](https://github.com/actions/runner-images/issues/553)
+  and [#7531](https://github.com/actions/runner-images/issues/7531).
+
+  The macOS code path uses the canonical AppleScript pattern that
+  [Thonny](https://github.com/thonny/thonny/blob/master/thonny/terminal.py)
+  and [skywind3000/terminal](https://github.com/skywind3000/terminal)
+  have shipped for ~10 years: `osascript` with an inline
+  `tell application "Terminal" / do script / activate` block that
+  branches on whether Terminal is already running (cold-start case uses
+  `in window 1` to avoid leaving an empty extra window). Backslash and
+  double-quote escaping is order-sensitive — backslashes are escaped
+  first. The CI matrix exercises this branch with mocked unit tests on
+  `macos-latest`, but does not real-spawn it.
 
 ## License
 

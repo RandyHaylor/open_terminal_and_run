@@ -273,17 +273,31 @@ def detect_mechanism(cmd: str, keep_open: bool = True) -> DetectionResult:
 
     # 2. macOS
     if _is_macos():
-        # Build an AppleScript that activates Terminal first (forces a window
-        # to come to the foreground / launches Terminal if not already
-        # running), then runs the command via `do script`.
-        escaped_cmd = cmd.replace('"', '\\"')
-        applescript = (
-            'tell application "Terminal"\n'
-            '    activate\n'
-            f'    do script "{escaped_cmd}"\n'
-            'end tell'
+        # Pattern copied from Thonny (thonny/terminal.py) and
+        # skywind3000/terminal — both branch on whether Terminal.app is
+        # already running, using `do script <cmd> in window 1` on cold
+        # start to avoid spawning a second empty window. Escaping order
+        # is critical: backslash MUST be escaped before the double quote
+        # (otherwise the backslash we add for the quote gets escaped
+        # again on the next pass). This pattern has been stable in
+        # multiple unrelated projects for ~10 years.
+        escaped_cmd_for_applescript_string_literal = (
+            cmd.replace("\\", "\\\\").replace('"', '\\"')
         )
-        argv = ["osascript", "-e", applescript]
+        applescript = (
+            'if application "Terminal" is running then\n'
+            '    tell application "Terminal"\n'
+            f'        do script "{escaped_cmd_for_applescript_string_literal}"\n'
+            '        activate\n'
+            '    end tell\n'
+            'else\n'
+            '    tell application "Terminal"\n'
+            f'        do script "{escaped_cmd_for_applescript_string_literal}" in window 1\n'
+            '        activate\n'
+            '    end tell\n'
+            'end if'
+        )
+        argv = ["/usr/bin/osascript", "-e", applescript]
         return DetectionResult(
             opened=False, mechanism="macOS Terminal.app", argv=argv,
             manual_command=cmd, detail="darwin uname; would use osascript",

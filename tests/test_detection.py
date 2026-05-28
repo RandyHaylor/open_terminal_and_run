@@ -18,9 +18,24 @@ def test_macos_branch(clean_env):
     clean_env.setattr(otr.sys, "platform", "darwin")
     result = otr.detect_mechanism('say "hi"')
     assert result.mechanism == "macOS Terminal.app"
-    assert result.argv[0] == "osascript"
+    assert result.argv[0].endswith("osascript")
     # Quotes in cmd must be escaped inside the AppleScript
     assert '\\"hi\\"' in result.argv[2]
+    # Cold-start branch should use `in window 1` to avoid extra window
+    assert "in window 1" in result.argv[2]
+    # Should activate Terminal to bring window to foreground
+    assert "activate" in result.argv[2]
+
+
+def test_macos_branch_escapes_backslash_before_quote(clean_env):
+    """Escape order matters: backslash first, then quote. Otherwise the
+    backslash added when escaping a quote would itself get escaped."""
+    clean_env.setattr(otr.platform, "system", lambda: "Darwin")
+    clean_env.setattr(otr.sys, "platform", "darwin")
+    result = otr.detect_mechanism(r'echo "C:\path"')
+    # Expect the backslash to appear as \\\\ in the AppleScript literal
+    # (one literal backslash escaped for AppleScript string syntax)
+    assert "\\\\path" in result.argv[2]
 
 
 def test_windows_prefers_wt(clean_env):

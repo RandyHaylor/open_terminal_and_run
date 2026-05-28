@@ -152,43 +152,21 @@ jobs:
           path: ${{ runner.temp }}/screenshot_${{ matrix.terminal }}.png
           if-no-files-found: warn
 
-  # =====================================================================
-  # 4. macOS Terminal.app — KNOWN-LIMITED on GitHub-hosted runners.
-  # AppleEvent/TCC restrictions prevent osascript from controlling
-  # Terminal.app without an approved automation permission grant, which
-  # the headless CI runner has no UI to provide. Verified by direct
-  # diagnostic in a prior run. Marked continue-on-error so the rest of
-  # the build can succeed; works correctly on real macOS desktops.
-  # =====================================================================
-  real_spawn_macos_terminal_app_best_effort:
-    name: Real spawn — macOS Terminal.app (best-effort)
-    runs-on: macos-latest
-    needs: unit_tests_mocked_across_full_matrix
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - name: Attempt spawn + screenshot
-        run: |
-          SENTINEL="$RUNNER_TEMP/sentinel_mac.txt"
-          SHOT="$RUNNER_TEMP/screenshot_macos_terminal.png"
-          python3 tests/verify_real_spawn_writes_sentinel_file.py \
-            --expected-mechanism "macOS Terminal.app" \
-            --sentinel "$SENTINEL" \
-            --timeout 60 \
-            --hold-seconds 20 \
-            --screenshot-output-path "$SHOT" \
-            --screenshot-delay-seconds 4
-      - name: Upload macOS screenshot artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshot_macos_terminal
-          path: ${{ runner.temp }}/screenshot_macos_terminal.png
-          if-no-files-found: warn
+  # NOTE: a macOS Terminal.app real-spawn job was intentionally NOT
+  # included. Verified empirically and via research that GitHub-hosted
+  # macOS runners cannot launch Terminal.app from a workflow:
+  #   - osascript→Terminal AppleEvent is TCC-blocked, no UI to approve
+  #   - `open -a Terminal file.command` needs a logged-in Aqua session
+  #     which hosted runners don't provide (runner runs as a background
+  #     service, not from a console login)
+  #   - TCC.db is SIP-protected; pre-approval is not possible on
+  #     GitHub-hosted runners
+  # See: actions/runner-images #553, #7531; aahlenst.dev "Accessing the
+  # macOS GUI in Automation Contexts". macOS source code is still
+  # exercised by the mocked unit tests on macos-latest above; the macOS
+  # branch is documented in the README as supported-but-untested.
 
-  # =====================================================================
+# =====================================================================
   # 5. Windows Terminal (wt.exe) — desktop screenshot via PowerShell.
   # =====================================================================
   real_spawn_windows_terminal_wt_exe:
