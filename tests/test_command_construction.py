@@ -38,13 +38,6 @@ def test_xterm_uses_dash_e_with_quoted_string(monkeypatch):
     assert r.argv[2].startswith("bash -c '")
 
 
-def test_kitty_no_dash_flag(monkeypatch):
-    _only("kitty", monkeypatch)
-    r = otr.detect_mechanism("ls", keep_open=True)
-    assert r.argv[0] == "kitty"
-    assert r.argv[1] == "bash"
-
-
 def test_keep_open_false_omits_exec_bash(monkeypatch):
     _only("gnome-terminal", monkeypatch)
     r = otr.detect_mechanism("ls", keep_open=False)

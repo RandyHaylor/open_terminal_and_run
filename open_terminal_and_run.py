@@ -197,10 +197,10 @@ LINUX_TERMINALS = [
      ["-e", "bash", "-c", "{cmd}; exec bash"],
      ["-e", "bash", "-c", "{cmd}"]),
 
-    # kitty: command list as positional args
-    ("kitty",
-     ["bash", "-c", "{cmd}; exec bash"],
-     ["bash", "-c", "{cmd}"]),
+    # kitty was removed from the supported list — its hard OpenGL
+    # requirement makes it impossible to verify in headless CI, and
+    # silently claiming support without verification is dishonest.
+    # Users who want kitty can extend LINUX_TERMINALS in a fork.
 
     # xterm: -e takes a single quoted command string
     ("xterm",
