@@ -7,48 +7,188 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+  # =====================================================================
+  # 1. Mocked unit tests across the full OS x Python matrix.
+  #    Verifies detection branches and argv construction without spawning.
+  # =====================================================================
+  unit_tests_mocked_across_full_matrix:
+    name: Unit tests (mocked) — ${{ matrix.os }} / py${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest
-
-      - name: Run unit tests (detection + command construction + CLI, all mocked)
-        run: pytest -v
-
-  smoke-spawn-linux:
-    name: Real spawn smoke test (Linux + xterm + xvfb)
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip pytest
+      - run: pytest -v tests/test_detection.py tests/test_command_construction.py tests/test_cli.py
 
-      - name: Install xterm + xvfb
+  # =====================================================================
+  # 2. tmux: spawn into a tmux pane, verify sentinel appears.
+  # =====================================================================
+  real_spawn_tmux_on_linux:
+    name: Real spawn — tmux (Linux)
+    runs-on: ubuntu-latest
+    needs: unit_tests_mocked_across_full_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install tmux
         run: |
           sudo apt-get update
-          sudo apt-get install -y xterm xvfb
-
-      - name: Spawn xterm headlessly via xvfb
+          sudo apt-get install -y tmux
+      - name: Spawn into tmux pane and verify sentinel
         run: |
-          xvfb-run -a python3 open_terminal_and_run.py --no-keep-open "true"
-          echo "spawn returned $?"
+          SENTINEL="$RUNNER_TEMP/sentinel_tmux.txt"
+          tmux new-session -d -s otr_session \
+            "python3 tests/verify_real_spawn_writes_sentinel_file.py \
+              --expected-mechanism tmux \
+              --sentinel $SENTINEL \
+              --timeout 30 ; echo \$? > $RUNNER_TEMP/harness_exit.txt"
+          # Wait for harness to write its exit code
+          for i in $(seq 1 60); do
+            [ -f "$RUNNER_TEMP/harness_exit.txt" ] && break
+            sleep 1
+          done
+          tmux capture-pane -t otr_session -p || true
+          EXIT_CODE=$(cat "$RUNNER_TEMP/harness_exit.txt" 2>/dev/null || echo 99)
+          echo "Harness exit code: $EXIT_CODE"
+          exit "$EXIT_CODE"
+
+  # =====================================================================
+  # 3. Linux desktop terminals, one job per emulator. Each installs ONLY
+  #    its target terminal (so detection's "first available" picks it),
+  #    runs under xvfb, and verifies the sentinel.
+  # =====================================================================
+  real_spawn_linux_terminal_emulator:
+    name: Real spawn — Linux ${{ matrix.terminal }}
+    runs-on: ubuntu-latest
+    needs: unit_tests_mocked_across_full_matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - terminal: xterm
+            apt_package: xterm
+            expected_mechanism: xterm
+          - terminal: gnome-terminal
+            apt_package: gnome-terminal dbus-x11
+            expected_mechanism: gnome-terminal
+          - terminal: konsole
+            apt_package: konsole
+            expected_mechanism: konsole
+          - terminal: xfce4-terminal
+            apt_package: xfce4-terminal
+            expected_mechanism: xfce4-terminal
+          - terminal: alacritty
+            apt_package: alacritty
+            expected_mechanism: alacritty
+          - terminal: kitty
+            apt_package: kitty
+            expected_mechanism: kitty
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install ${{ matrix.terminal }} and xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb ${{ matrix.apt_package }}
+      - name: Confirm only the target terminal is detectable
+        run: |
+          echo "Checking which terminals shutil.which sees:"
+          for t in gnome-terminal konsole xfce4-terminal alacritty kitty xterm; do
+            if command -v "$t" >/dev/null; then echo "  FOUND: $t"; else echo "  missing: $t"; fi
+          done
+      - name: Spawn ${{ matrix.terminal }} under xvfb and verify sentinel
+        run: |
+          SENTINEL="$RUNNER_TEMP/sentinel_${{ matrix.terminal }}.txt"
+          # gnome-terminal needs a DBus session bus
+          if [ "${{ matrix.terminal }}" = "gnome-terminal" ]; then
+            xvfb-run -a dbus-launch --exit-with-session \
+              python3 tests/verify_real_spawn_writes_sentinel_file.py \
+                --expected-mechanism "${{ matrix.expected_mechanism }}" \
+                --sentinel "$SENTINEL" \
+                --timeout 45
+          else
+            xvfb-run -a \
+              python3 tests/verify_real_spawn_writes_sentinel_file.py \
+                --expected-mechanism "${{ matrix.expected_mechanism }}" \
+                --sentinel "$SENTINEL" \
+                --timeout 45
+          fi
+
+  # =====================================================================
+  # 4. macOS Terminal.app via osascript.
+  # =====================================================================
+  real_spawn_macos_terminal_app:
+    name: Real spawn — macOS Terminal.app
+    runs-on: macos-latest
+    needs: unit_tests_mocked_across_full_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Spawn macOS Terminal.app and verify sentinel
+        run: |
+          SENTINEL="$RUNNER_TEMP/sentinel_mac_terminal.txt"
+          python3 tests/verify_real_spawn_writes_sentinel_file.py \
+            --expected-mechanism "macOS Terminal.app" \
+            --sentinel "$SENTINEL" \
+            --timeout 45
+
+  # =====================================================================
+  # 5. Windows Terminal (wt.exe).
+  # =====================================================================
+  real_spawn_windows_terminal_wt_exe:
+    name: Real spawn — Windows Terminal (wt.exe)
+    runs-on: windows-latest
+    needs: unit_tests_mocked_across_full_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Check wt.exe availability and install if missing
+        shell: pwsh
+        run: |
+          $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
+          if (-not $wt) {
+            Write-Host "wt.exe not found, attempting winget install"
+            winget install --id Microsoft.WindowsTerminal --accept-source-agreements --accept-package-agreements --silent
+          } else {
+            Write-Host "Found wt.exe at: $($wt.Source)"
+          }
+      - name: Spawn Windows Terminal and verify sentinel
+        shell: pwsh
+        run: |
+          $sentinel = Join-Path $env:RUNNER_TEMP "sentinel_wt.txt"
+          python tests/verify_real_spawn_writes_sentinel_file.py `
+            --expected-mechanism "Windows Terminal" `
+            --sentinel "$sentinel" `
+            --timeout 45
+
+  # =====================================================================
+  # 6. Windows cmd.exe (forced via --hide-wt to mask wt.exe).
+  # =====================================================================
+  real_spawn_windows_cmd_exe:
+    name: Real spawn — Windows cmd.exe (wt.exe hidden)
+    runs-on: windows-latest
+    needs: unit_tests_mocked_across_full_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Spawn cmd.exe (wt hidden) and verify sentinel
+        shell: pwsh
+        run: |
+          $sentinel = Join-Path $env:RUNNER_TEMP "sentinel_cmd.txt"
+          python tests/verify_real_spawn_writes_sentinel_file.py `
+            --expected-mechanism "cmd.exe" `
+            --sentinel "$sentinel" `
+            --hide-wt `
+            --timeout 45
